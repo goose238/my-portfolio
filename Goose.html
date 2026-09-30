@@ -1,0 +1,1517 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Гусь-Тапалка</title>
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+  body {
+    background: linear-gradient(180deg, #1e2a38 0%, #2b3a4a 50%, #3d4a57 100%);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: Arial, sans-serif;
+    touch-action: manipulation;
+  }
+  #snow { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+  #score {
+    position: fixed; top: 16px; left: 20px;
+    color: white; font-size: 30px; font-weight: bold;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    z-index: 2; line-height: 1.2;
+  }
+  #stats { font-size: 13px; font-weight: normal; color: #b8c4d1; margin-top: 2px; }
+  #boostInfo { font-size: 12px; color: #ffb400; font-weight: bold; margin-top: 2px; display: none; }
+  #boostInfo.on { display: block; }
+
+  #topBtns {
+    position: fixed; top: 20px; right: 20px;
+    display: flex; gap: 8px; z-index: 15;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+  #topRow1, #topRow2 {
+    display: flex; gap: 8px;
+  }
+  .roundBtn {
+    position: relative;
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: white; font-size: 20px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s;
+    backdrop-filter: blur(4px);
+  }
+  .roundBtn:hover { background: rgba(255,255,255,0.2); }
+  .roundBtn.active {
+    background: rgba(74,144,226,0.5);
+    border-color: rgba(74,144,226,0.8);
+    box-shadow: 0 0 12px rgba(74,144,226,0.5);
+  }
+  .roundBtn .badge {
+    position: absolute; top: -4px; right: -4px;
+    background: #ffb400; color: #222;
+    border-radius: 10px; padding: 1px 6px;
+    font-size: 11px; font-weight: bold;
+    min-width: 18px; text-align: center;
+  }
+
+  #gooseWrap {
+    position: relative;
+    z-index: 1;
+    width: 60vw;
+    max-width: 340px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #gooseWrap:active { transform: scale(0.97); }
+  #gooseImg {
+    width: 100%;
+    height: auto;
+    display: block;
+    filter: drop-shadow(0 10px 15px rgba(0,0,0,0.4));
+    will-change: filter;
+  }
+
+  #gooseFallback {
+    display: none;
+    width: 100%;
+    aspect-ratio: 1;
+    align-items: center;
+    justify-content: center;
+    font-size: 42vw;
+    max-font-size: 260px;
+    line-height: 1;
+    filter: drop-shadow(0 10px 15px rgba(0,0,0,0.5));
+    user-select: none;
+    pointer-events: none;
+  }
+  #gooseWrap.no-image #gooseImg { display: none; }
+  #gooseWrap.no-image #gooseFallback { display: flex; }
+
+  .popup {
+    position: fixed;
+    color: #fff; font-size: 26px; font-weight: bold;
+    pointer-events: none; z-index: 4;
+    text-shadow: 0 0 10px rgba(255,220,100,0.9), 2px 2px 4px rgba(0,0,0,0.6);
+    animation: popUp 0.7s ease-out forwards;
+    will-change: transform, opacity;
+  }
+  @keyframes popUp {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+    20% { opacity: 1; transform: translate(-50%, -70%) scale(1.2); }
+    100% { opacity: 0; transform: translate(-50%, -160%) scale(1); }
+  }
+
+  #hint {
+    position: fixed; bottom: 90px;
+    color: #9aa5b1; font-size: 14px;
+    z-index: 2; pointer-events: none;
+  }
+
+  #achToast {
+    position: fixed; top: 80px; left: 50%;
+    transform: translate(-50%, -30px);
+    background: linear-gradient(135deg, #ffb400, #ff8c00);
+    color: #222; padding: 12px 20px;
+    border-radius: 14px;
+    box-shadow: 0 8px 30px rgba(255,180,0,0.6);
+    display: flex; align-items: center; gap: 12px;
+    z-index: 100; opacity: 0; pointer-events: none;
+    transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.35s;
+    max-width: 90vw;
+  }
+  #achToast.show { opacity: 1; transform: translate(-50%, 0); }
+  #achToast .toastIcon { font-size: 28px; flex-shrink: 0; }
+  #achToast .toastText { font-weight: bold; font-size: 14px; line-height: 1.3; }
+  #achToast .toastSub { font-size: 12px; font-weight: normal; opacity: 0.85; }
+
+  .panel {
+    position: fixed; top: 76px; right: 20px;
+    width: 320px; max-height: 70vh;
+    background: rgba(20, 28, 38, 0.96);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 16px;
+    padding: 16px; color: white; z-index: 14;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    transform: translateY(-10px) scale(0.96);
+    opacity: 0; pointer-events: none;
+    transition: transform 0.2s, opacity 0.2s;
+    overflow-y: auto;
+  }
+  .panel.open { transform: translateY(0) scale(1); opacity: 1; pointer-events: auto; }
+  .panelTitle {
+    font-size: 12px; color: #8899aa;
+    text-transform: uppercase;
+    letter-spacing: 1px; margin-bottom: 12px;
+  }
+
+  .panelRow { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .panelRow:last-child { margin-bottom: 0; }
+  .panelIcon { font-size: 18px; width: 24px; text-align: center; flex-shrink: 0; }
+  .panelLabel { font-size: 13px; color: #c5cfda; min-width: 60px; }
+  .toggle {
+    position: relative; width: 44px; height: 24px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 12px; cursor: pointer; flex-shrink: 0;
+    transition: background 0.25s;
+  }
+  .toggle::after {
+    content: '';
+    position: absolute;
+    width: 18px; height: 18px;
+    background: white; border-radius: 50%;
+    top: 3px; left: 3px;
+    transition: transform 0.25s;
+  }
+  .toggle.on { background: #4a90e2; }
+  .toggle.on::after { transform: translateX(20px); }
+
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    flex: 1; height: 6px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 3px; outline: none; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 18px; height: 18px;
+    background: #4a90e2; border-radius: 50%;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    cursor: pointer;
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 18px; height: 18px;
+    background: #4a90e2; border-radius: 50%;
+    border: 2px solid #fff; cursor: pointer;
+  }
+  .panelDivider { height: 1px; background: rgba(255,255,255,0.1); margin: 12px 0; }
+
+  #achProgress {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 14px; font-size: 13px; color: #c5cfda;
+  }
+  #achProgress .count { font-weight: bold; color: #ffd166; }
+  #achProgress .bar {
+    width: 100px; height: 6px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 3px; overflow: hidden;
+  }
+  #achProgress .barFill {
+    height: 100%;
+    background: linear-gradient(90deg, #ffb400, #ff8c00);
+    transition: width 0.4s; border-radius: 3px;
+  }
+
+  .achievement {
+    display: flex; align-items: center; gap: 12px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 10px 12px; margin-bottom: 8px;
+    transition: background 0.3s;
+  }
+  .achievement.unlocked {
+    background: linear-gradient(135deg, rgba(255,180,0,0.15), rgba(255,140,0,0.1));
+    border-color: rgba(255,180,0,0.4);
+  }
+  .achievement .achIcon {
+    font-size: 26px; flex-shrink: 0;
+    filter: grayscale(1) opacity(0.4);
+    transition: filter 0.4s;
+  }
+  .achievement.unlocked .achIcon { filter: none; }
+  .achievement .achInfo { flex: 1; min-width: 0; }
+  .achievement .achName {
+    font-size: 14px; font-weight: bold;
+    margin-bottom: 2px;
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  }
+  .achievement .achName .reward {
+    font-size: 11px; color: #ffd166; font-weight: normal;
+  }
+  .achievement .achDesc {
+    font-size: 11.5px; color: #a8b5c4; line-height: 1.3;
+  }
+  .achievement .achProgress {
+    font-size: 11px; color: #8899aa; margin-top: 3px;
+  }
+  .achievement .achCheck {
+    font-size: 20px; color: #6dd36d; flex-shrink: 0;
+    opacity: 0; transition: opacity 0.3s;
+  }
+  .achievement.unlocked .achCheck { opacity: 1; }
+
+  .codeInput { display: flex; gap: 8px; margin-bottom: 14px; }
+  .codeInput input {
+    flex: 1;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: white;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-family: monospace;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    outline: none;
+  }
+  .codeInput input:focus {
+    border-color: rgba(74,144,226,0.8);
+    background: rgba(74,144,226,0.1);
+  }
+  .codeInput input::placeholder { color: #5a6673; }
+  .codeInput button {
+    background: linear-gradient(135deg, #4a90e2, #357abd);
+    border: none; color: white;
+    padding: 0 18px;
+    border-radius: 10px;
+    font-size: 15px; font-weight: bold;
+    cursor: pointer;
+  }
+  .codeInput button:active { transform: scale(0.95); }
+
+  .codeMsg {
+    font-size: 13px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    margin-bottom: 12px;
+    display: none;
+  }
+  .codeMsg.ok {
+    display: block;
+    background: rgba(109,211,109,0.15);
+    border: 1px solid rgba(109,211,109,0.4);
+    color: #6dd36d;
+  }
+  .codeMsg.err {
+    display: block;
+    background: rgba(255,80,80,0.15);
+    border: 1px solid rgba(255,80,80,0.4);
+    color: #ff9c9c;
+  }
+
+  #shopToggle {
+    position: fixed; bottom: 18px; left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #4a90e2, #357abd);
+    color: white; border: none;
+    padding: 14px 28px; border-radius: 30px;
+    font-size: 17px; font-weight: bold;
+    cursor: pointer; z-index: 6;
+    box-shadow: 0 6px 20px rgba(74,144,226,0.4);
+    transition: transform 0.15s;
+  }
+  #shopToggle:active { transform: translateX(-50%) scale(0.95); }
+  #shopToggle .badge {
+    display: inline-block;
+    background: #ffb400; color: #222;
+    border-radius: 10px;
+    padding: 1px 8px;
+    font-size: 13px; margin-left: 6px; font-weight: bold;
+  }
+
+  #shop {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: rgba(20, 28, 38, 0.95);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(255,255,255,0.1);
+    border-radius: 24px 24px 0 0;
+    padding: 18px 16px 24px;
+    z-index: 10;
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.34, 1.2, 0.64, 1);
+    max-height: 70vh; overflow-y: auto; color: white;
+  }
+  #shop.open { transform: translateY(0); }
+  #shopHeader {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 14px;
+  }
+  #shopHeader h2 { font-size: 20px; font-weight: bold; }
+  #closeShop {
+    background: rgba(255,255,255,0.1);
+    border: none; color: white;
+    width: 34px; height: 34px;
+    border-radius: 50%; font-size: 18px;
+    cursor: pointer;
+  }
+
+  .upgrade {
+    display: flex; align-items: center; gap: 12px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: 12px 14px; margin-bottom: 10px;
+    transition: background 0.15s;
+  }
+  .upgrade.can-buy {
+    background: rgba(74,144,226,0.15);
+    border-color: rgba(74,144,226,0.4);
+    cursor: pointer;
+  }
+  .upgrade.can-buy:active { background: rgba(74,144,226,0.3); }
+  .upgrade.locked { opacity: 0.55; }
+  .upgrade .icon { font-size: 30px; flex-shrink: 0; }
+  .upgrade .info { flex: 1; min-width: 0; }
+  .upgrade .name { font-size: 15px; font-weight: bold; margin-bottom: 2px; }
+  .upgrade .desc { font-size: 12px; color: #a8b5c4; line-height: 1.3; }
+  .upgrade .lv {
+    display: inline-block;
+    background: rgba(255,255,255,0.15);
+    border-radius: 6px; font-size: 11px;
+    padding: 1px 6px; margin-left: 6px;
+    font-weight: normal;
+  }
+  .upgrade .buy { text-align: right; flex-shrink: 0; }
+  .upgrade .price { font-size: 14px; font-weight: bold; color: #ffd166; }
+  .upgrade .price.cant { color: #ff7b7b; }
+
+  #resetBtn {
+    width: 100%;
+    background: rgba(255,80,80,0.15);
+    border: 1px solid rgba(255,80,80,0.3);
+    color: #ff9c9c;
+    padding: 10px; border-radius: 12px;
+    font-size: 13px; cursor: pointer; margin-top: 8px;
+  }
+  #resetBtn:active { background: rgba(255,80,80,0.3); }
+</style>
+</head>
+<body>
+
+<canvas id="snow"></canvas>
+
+<div id="score">
+  Гусей: <span id="scoreVal">0</span>
+  <div id="stats">+0 за клик · +0/сек</div>
+  <div id="boostInfo">⚡ ×10 · <span id="boostTime">0:00</span></div>
+</div>
+
+<!-- Кнопки: Коды · Достижения · Настройки -->
+<div id="topBtns">
+  <div id="topRow1">
+    <button id="codeBtn" class="roundBtn" title="Коды">🔑</button>
+    <button id="achBtn" class="roundBtn" title="Достижения">🏆</button>
+  </div>
+  <div id="topRow2">
+    <button id="soundBtn" class="roundBtn" title="Настройки звука">⚙️</button>
+  </div>
+</div>
+
+<div id="achToast">
+  <div class="toastIcon">🏆</div>
+  <div>
+    <div class="toastText">Достижение!</div>
+    <div class="toastSub" id="achToastName"></div>
+  </div>
+</div>
+
+<div id="achPanel" class="panel">
+  <div class="panelTitle">🏆 Достижения</div>
+  <div id="achProgress">
+    <span>Открыто: <span class="count" id="achCount">0 / 29</span></span>
+    <div class="bar"><div class="barFill" id="achBar" style="width:0%"></div></div>
+  </div>
+  <div id="achList"></div>
+</div>
+
+<div id="soundPanel" class="panel">
+  <div class="panelTitle">🎵 Звук</div>
+  <div class="panelRow">
+    <span class="panelIcon">🎵</span>
+    <span class="panelLabel">Музыка</span>
+    <div class="toggle" id="musicToggle"></div>
+  </div>
+  <div class="panelRow">
+    <span class="panelIcon"></span>
+    <input type="range" id="musicVol" min="0" max="100" value="85">
+  </div>
+  <div class="panelDivider"></div>
+  <div class="panelRow">
+    <span class="panelIcon">🔊</span>
+    <span class="panelLabel">Звуки</span>
+    <div class="toggle" id="sfxToggle"></div>
+  </div>
+  <div class="panelRow">
+    <span class="panelIcon"></span>
+    <input type="range" id="sfxVol" min="0" max="100" value="80">
+  </div>
+</div>
+
+<div id="codePanel" class="panel">
+  <div class="panelTitle">🔑 Секретные коды</div>
+  <div class="codeInput">
+    <input type="text" id="codeInput" placeholder="ВВЕДИ КОД..." maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false">
+    <button id="codeApply">OK</button>
+  </div>
+  <div class="codeMsg" id="codeMsg"></div>
+</div>
+
+<div id="gooseWrap">
+  <img id="gooseImg" src="goose.png" alt="Гусь">
+  <div id="gooseFallback">🦆</div>
+</div>
+
+<div id="hint">Тапай гуся!</div>
+
+<button id="shopToggle">🛒 Прокачки</button>
+
+<div id="shop">
+  <div id="shopHeader">
+    <h2>⬆️ Прокачки</h2>
+    <button id="closeShop">✕</button>
+  </div>
+  <div id="shopContent"></div>
+  <button id="resetBtn">🗑 Сбросить прогресс</button>
+</div>
+
+<script>
+  /* ==================== ЗВУК ==================== */
+  const Sound = (() => {
+    let ctx = null;
+    let masterMusicGain = null;
+    let masterSfxGain = null;
+    let delayNode = null;
+    let musicScheduler = null;
+    let nextLoopTime = 0;
+
+    let settings = { musicOn: true, sfxOn: true, musicVol: 0.85, sfxVol: 0.8 };
+    try {
+      const raw = localStorage.getItem('gooseSound');
+      if (raw) settings = Object.assign(settings, JSON.parse(raw));
+    } catch (e) {}
+
+    function saveSettings() {
+      try { localStorage.setItem('gooseSound', JSON.stringify(settings)); } catch (e) {}
+    }
+
+    function init() {
+      if (ctx) return;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      ctx = new AC();
+
+      masterMusicGain = ctx.createGain();
+      masterMusicGain.gain.value = settings.musicOn ? settings.musicVol : 0;
+      masterMusicGain.connect(ctx.destination);
+
+      masterSfxGain = ctx.createGain();
+      masterSfxGain.gain.value = settings.sfxOn ? settings.sfxVol : 0;
+      masterSfxGain.connect(ctx.destination);
+
+      delayNode = ctx.createDelay(1.0);
+      delayNode.delayTime.value = 0.35;
+      const feedback = ctx.createGain();
+      feedback.gain.value = 0.25;
+      const wet = ctx.createGain();
+      wet.gain.value = 0.35;
+      delayNode.connect(feedback);
+      feedback.connect(delayNode);
+      delayNode.connect(wet);
+      wet.connect(masterMusicGain);
+    }
+
+    function ensure() {
+      init();
+      if (!ctx) return false;
+      if (ctx.state === 'suspended') ctx.resume();
+      return true;
+    }
+
+    function tone(freq, duration, type = 'sine', gainVal = 0.04, delay = 0, toMusic = false) {
+      if (!ensure()) return;
+      const t0 = ctx.currentTime + delay;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, t0);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(gainVal, t0 + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+      osc.connect(gain);
+      gain.connect(toMusic ? masterMusicGain : masterSfxGain);
+      osc.start(t0);
+      osc.stop(t0 + duration + 0.02);
+    }
+
+    function quack() {
+      if (!ensure()) return;
+      const t0 = ctx.currentTime;
+      const baseFreq = 340 + Math.random() * 80;
+      const osc1 = ctx.createOscillator();
+      const g1 = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+      osc1.type = 'sawtooth';
+      osc1.frequency.setValueAtTime(baseFreq, t0);
+      osc1.frequency.exponentialRampToValueAtTime(baseFreq * 0.6, t0 + 0.12);
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(900, t0);
+      filter.Q.value = 3;
+      g1.gain.setValueAtTime(0.0001, t0);
+      g1.gain.exponentialRampToValueAtTime(0.06, t0 + 0.015);
+      g1.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.14);
+      osc1.connect(filter).connect(g1).connect(masterSfxGain);
+      osc1.start(t0); osc1.stop(t0 + 0.16);
+
+      const osc2 = ctx.createOscillator();
+      const g2 = ctx.createGain();
+      osc2.type = 'square';
+      osc2.frequency.setValueAtTime(baseFreq * 1.1, t0 + 0.09);
+      osc2.frequency.exponentialRampToValueAtTime(baseFreq * 0.75, t0 + 0.2);
+      g2.gain.setValueAtTime(0.0001, t0 + 0.09);
+      g2.gain.exponentialRampToValueAtTime(0.04, t0 + 0.1);
+      g2.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
+      osc2.connect(g2).connect(masterSfxGain);
+      osc2.start(t0 + 0.09); osc2.stop(t0 + 0.24);
+    }
+    function pop() { tone(900 + Math.random() * 150, 0.05, 'triangle', 0.025); }
+    function buy() {
+      if (!ensure()) return;
+      tone(660, 0.1, 'triangle', 0.06, 0);
+      tone(990, 0.15, 'triangle', 0.05, 0.06);
+      tone(1320, 0.2, 'triangle', 0.04, 0.12);
+    }
+    function achievement() {
+      if (!ensure()) return;
+      const notes = [523.25, 659.25, 783.99, 1046.50];
+      notes.forEach((f, i) => {
+        tone(f, 0.2, 'triangle', 0.07, i * 0.08);
+        tone(f * 2, 0.2, 'sine', 0.03, i * 0.08);
+      });
+    }
+    function codeGood() {
+      if (!ensure()) return;
+      const notes = [523.25, 659.25, 783.99, 1046.50, 1318.51];
+      notes.forEach((f, i) => {
+        tone(f, 0.18, 'sine', 0.07, i * 0.07);
+        tone(f * 1.5, 0.18, 'triangle', 0.03, i * 0.07);
+      });
+    }
+    function codeBad() {
+      if (!ensure()) return;
+      tone(200, 0.15, 'sawtooth', 0.06, 0);
+      tone(150, 0.25, 'sawtooth', 0.05, 0.12);
+    }
+
+    const MELODY = [
+      { f: 440.00, dur: 1.2 }, { f: 523.25, dur: 1.0 },
+      { f: 659.25, dur: 1.4 }, { f: 587.33, dur: 0.9 },
+      { f: 523.25, dur: 1.1 }, { f: 493.88, dur: 1.0 },
+      { f: 440.00, dur: 1.5 }, { f: 329.63, dur: 1.3 }
+    ];
+    const BASS = [
+      { f: 110.00, dur: 1.8 }, { f: 164.81, dur: 1.8 },
+      { f: 130.81, dur: 1.8 }, { f: 164.81, dur: 1.8 }
+    ];
+    const NOTE_GAP = 0.9;
+    const LOOP_DUR = MELODY.length * NOTE_GAP;
+
+    function scheduleOneLoop(t0) {
+      let time = 0;
+      for (const note of MELODY) {
+        const osc = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const g2 = ctx.createGain();
+        osc.type = 'sine'; osc2.type = 'triangle';
+        osc.frequency.setValueAtTime(note.f, t0 + time);
+        osc2.frequency.setValueAtTime(note.f, t0 + time);
+        g2.gain.value = 0.3;
+
+        gain.gain.setValueAtTime(0.0001, t0 + time);
+        gain.gain.exponentialRampToValueAtTime(0.04, t0 + time + 0.15);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + time + note.dur * 0.9);
+
+        osc.connect(gain);
+        osc2.connect(g2).connect(gain);
+        gain.connect(masterMusicGain);
+        if (delayNode) gain.connect(delayNode);
+
+        osc.start(t0 + time); osc2.start(t0 + time);
+        osc.stop(t0 + time + note.dur); osc2.stop(t0 + time + note.dur);
+        time += NOTE_GAP;
+      }
+      let bassTime = 0;
+      for (const note of BASS) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(note.f, t0 + bassTime);
+        gain.gain.setValueAtTime(0.0001, t0 + bassTime);
+        gain.gain.exponentialRampToValueAtTime(0.03, t0 + bassTime + 0.2);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + bassTime + note.dur);
+        osc.connect(gain).connect(masterMusicGain);
+        osc.start(t0 + bassTime);
+        osc.stop(t0 + bassTime + note.dur + 0.05);
+        bassTime += NOTE_GAP * 4;
+      }
+    }
+
+    function startMusic() {
+      if (!ensure() || musicScheduler) return;
+      const lookahead = LOOP_DUR * 3;
+      nextLoopTime = ctx.currentTime + 0.05;
+      scheduleOneLoop(nextLoopTime);
+      nextLoopTime += LOOP_DUR;
+
+      musicScheduler = setInterval(() => {
+        if (!ctx) return;
+        while (nextLoopTime < ctx.currentTime + lookahead) {
+          scheduleOneLoop(nextLoopTime);
+          nextLoopTime += LOOP_DUR;
+        }
+      }, 2000);
+    }
+
+    function stopMusic() {
+      if (musicScheduler) {
+        clearInterval(musicScheduler);
+        musicScheduler = null;
+      }
+      if (masterMusicGain && ctx) {
+        const t = ctx.currentTime;
+        masterMusicGain.gain.cancelScheduledValues(t);
+        masterMusicGain.gain.setValueAtTime(masterMusicGain.gain.value, t);
+        masterMusicGain.gain.linearRampToValueAtTime(0, t + 0.4);
+      }
+    }
+
+    function resumeMusic() {
+      if (!ensure()) return;
+      if (masterMusicGain) {
+        const t = ctx.currentTime;
+        masterMusicGain.gain.cancelScheduledValues(t);
+        masterMusicGain.gain.setValueAtTime(masterMusicGain.gain.value, t);
+        masterMusicGain.gain.linearRampToValueAtTime(settings.musicVol, t + 0.4);
+      }
+      if (!musicScheduler) {
+        nextLoopTime = ctx.currentTime + 0.05;
+        startMusic();
+      }
+    }
+
+    function setMusicOn(v) { settings.musicOn = v; saveSettings(); if (v) resumeMusic(); else stopMusic(); }
+    function setSfxOn(v) {
+      settings.sfxOn = v; saveSettings();
+      if (masterSfxGain && ctx) {
+        const t = ctx.currentTime;
+        masterSfxGain.gain.cancelScheduledValues(t);
+        masterSfxGain.gain.setValueAtTime(masterSfxGain.gain.value, t);
+        masterSfxGain.gain.linearRampToValueAtTime(v ? settings.sfxVol : 0, t + 0.15);
+      }
+    }
+    function setMusicVol(v) {
+      settings.musicVol = v; saveSettings();
+      if (masterMusicGain && ctx && settings.musicOn) {
+        const t = ctx.currentTime;
+        masterMusicGain.gain.cancelScheduledValues(t);
+        masterMusicGain.gain.setValueAtTime(masterMusicGain.gain.value, t);
+        masterMusicGain.gain.linearRampToValueAtTime(v, t + 0.1);
+      }
+    }
+    function setSfxVol(v) {
+      settings.sfxVol = v; saveSettings();
+      if (masterSfxGain && ctx && settings.sfxOn) {
+        const t = ctx.currentTime;
+        masterSfxGain.gain.cancelScheduledValues(t);
+        masterSfxGain.gain.setValueAtTime(masterSfxGain.gain.value, t);
+        masterSfxGain.gain.linearRampToValueAtTime(v, t + 0.1);
+      }
+    }
+
+    return {
+      quack, pop, buy, achievement, codeGood, codeBad,
+      init: ensure,
+      startMusic, stopMusic, resumeMusic,
+      setMusicOn, setSfxOn, setMusicVol, setSfxVol,
+      get settings() { return settings; }
+    };
+  })();
+
+  /* ==================== СНЕЖИНКИ ==================== */
+  const canvas = document.getElementById('snow');
+  const ctx = canvas.getContext('2d');
+  let flakes = [];
+  let W, H;
+  const SPRITE_SIZE = 32;
+  const SPRITE_VARIANTS = 4;
+  const sprites = [];
+
+  function makeSprite(variant) {
+    const s = document.createElement('canvas');
+    s.width = s.height = SPRITE_SIZE;
+    const c = s.getContext('2d');
+    const cx = SPRITE_SIZE / 2, cy = SPRITE_SIZE / 2;
+    c.shadowColor = 'rgba(200,230,255,0.9)';
+    c.shadowBlur = 3;
+    c.strokeStyle = 'rgba(255,255,255,0.95)';
+    c.lineWidth = 1.2;
+    c.lineCap = 'round';
+    const R = SPRITE_SIZE * 0.38;
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI / 3) * i;
+      const dx = Math.cos(a), dy = Math.sin(a);
+      c.beginPath(); c.moveTo(cx, cy);
+      c.lineTo(cx + dx * R, cy + dy * R); c.stroke();
+      const bx = cx + dx * R * 0.55, by = cy + dy * R * 0.55;
+      const branchLen = R * (variant === 0 ? 0.35 : variant === 1 ? 0.25 : 0.45);
+      const angles = variant === 3 ? [0.5] : [-0.6, 0.6];
+      for (const off of angles) {
+        const ba = a + off;
+        c.beginPath(); c.moveTo(bx, by);
+        c.lineTo(bx + Math.cos(ba) * branchLen, by + Math.sin(ba) * branchLen);
+        c.stroke();
+      }
+    }
+    c.shadowBlur = 0;
+    c.fillStyle = 'rgba(255,255,255,0.95)';
+    c.beginPath(); c.arc(cx, cy, 1.4, 0, Math.PI * 2); c.fill();
+    return s;
+  }
+  for (let v = 0; v < SPRITE_VARIANTS; v++) sprites.push(makeSprite(v));
+
+  function resizeCanvas() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+  resizeCanvas();
+
+  function createFlakes() {
+    flakes = [];
+    const count = Math.min(150, Math.floor((W * H) / 9000));
+    for (let i = 0; i < count; i++) {
+      const size = 4 + Math.random() * 12;
+      const depth = (size - 4) / 12;
+      flakes.push({
+        x: Math.random() * W, y: Math.random() * H, size,
+        speed: 0.3 + depth * 1.4,
+        drift: (Math.random() - 0.5) * 0.4,
+        sway: 0.4 + Math.random() * 1.2,
+        phase: Math.random() * Math.PI * 2,
+        rot: Math.random() * Math.PI,
+        rotSpeed: (Math.random() - 0.5) * 0.015,
+        alpha: 0.35 + depth * 0.55,
+        sprite: sprites[(Math.random() * SPRITE_VARIANTS) | 0]
+      });
+    }
+  }
+  createFlakes();
+  window.addEventListener('resize', () => { resizeCanvas(); createFlakes(); });
+
+  let t = 0;
+  function drawSnow() {
+    ctx.clearRect(0, 0, W, H);
+    t += 0.01;
+    for (let i = 0; i < flakes.length; i++) {
+      const f = flakes[i];
+      const swayX = Math.sin(t + f.phase) * f.sway * 4;
+      ctx.globalAlpha = f.alpha;
+      ctx.save();
+      ctx.translate(f.x + swayX, f.y);
+      ctx.rotate(f.rot);
+      ctx.drawImage(f.sprite, -f.size / 2, -f.size / 2, f.size, f.size);
+      ctx.restore();
+      f.y += f.speed; f.x += f.drift; f.rot += f.rotSpeed;
+      if (f.y - 20 > H) { f.y = -20; f.x = Math.random() * W; }
+      if (f.x < -20) f.x = W + 20;
+      if (f.x > W + 20) f.x = -20;
+    }
+    ctx.globalAlpha = 1;
+    requestAnimationFrame(drawSnow);
+  }
+  drawSnow();
+
+  /* ==================== ФОРМАТ ==================== */
+  function fmt(n) {
+    n = Math.floor(n);
+    if (n < 1000) return n.toString();
+    if (n < 1e6) return (n / 1000).toFixed(n < 1e4 ? 1 : 0) + 'K';
+    if (n < 1e9) return (n / 1e6).toFixed(2) + 'M';
+    if (n < 1e12) return (n / 1e9).toFixed(2) + 'B';
+    return (n / 1e12).toFixed(2) + 'T';
+  }
+  function fmtTime(sec) {
+    sec = Math.floor(sec);
+    if (sec < 60) return sec + 'с';
+    const m = Math.floor(sec / 60);
+    if (m < 60) return m + 'м';
+    const h = Math.floor(m / 60);
+    const mm = m % 60;
+    return h + 'ч ' + mm + 'м';
+  }
+  function fmtShortTime(sec) {
+    sec = Math.max(0, Math.floor(sec));
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  /* ==================== ПРОКАЧКИ ==================== */
+  const UPGRADES = [
+    { id: 'finger', icon: '🖐', name: 'Крепкий палец', desc: '+1 гусь за клик', baseCost: 10, costMul: 1.5 },
+    { id: 'farm', icon: '🤖', name: 'Гусеферма', desc: '+1 гусь в секунду', baseCost: 50, costMul: 1.6 },
+    { id: 'golden', icon: '✨', name: 'Золотое перо', desc: '+10% ко всем кликам', baseCost: 200, costMul: 2.0 }
+  ];
+
+  /* ==================== ДОСТИЖЕНИЯ ==================== */
+  const ACHIEVEMENTS = [
+    { id: 'first_tap', icon: '👆', name: 'Первый тап', desc: 'Сделать первый клик по гусю', reward: 5,
+      check: s => s.totalClicks >= 1, progress: s => [Math.min(s.totalClicks, 1), 1] },
+    { id: 'hundred_taps', icon: '💪', name: 'Сто кликов', desc: 'Тапнуть гуся 100 раз', reward: 50,
+      check: s => s.totalClicks >= 100, progress: s => [Math.min(s.totalClicks, 100), 100] },
+    { id: 'fivehundred_taps', icon: '👊', name: 'Быстрые пальцы', desc: 'Тапнуть гуся 500 раз', reward: 300,
+      check: s => s.totalClicks >= 500, progress: s => [Math.min(s.totalClicks, 500), 500] },
+    { id: 'thousand_taps', icon: '🔥', name: 'Тысяча тапов', desc: 'Тапнуть гуся 1000 раз', reward: 500,
+      check: s => s.totalClicks >= 1000, progress: s => [Math.min(s.totalClicks, 1000), 1000] },
+    { id: 'fivek_taps', icon: '💫', name: 'Ураган кликов', desc: 'Тапнуть гуся 5000 раз', reward: 3000,
+      check: s => s.totalClicks >= 5000, progress: s => [Math.min(s.totalClicks, 5000), 5000] },
+    { id: 'tenk_taps', icon: '🖐', name: 'Легенда клика', desc: 'Тапнуть гуся 10 000 раз', reward: 5000,
+      check: s => s.totalClicks >= 10000, progress: s => [Math.min(s.totalClicks, 10000), 10000] },
+    { id: 'hundredk_taps', icon: '⚡', name: 'Гусиный бог', desc: 'Тапнуть гуся 100 000 раз', reward: 100000,
+      check: s => s.totalClicks >= 100000, progress: s => [Math.min(s.totalClicks, 100000), 100000] },
+    { id: 'million_taps', icon: '💎', name: 'Миллионер кликов', desc: 'Тапнуть гуся 1 000 000 раз', reward: 1000000,
+      check: s => s.totalClicks >= 1000000, progress: s => [Math.min(s.totalClicks, 1000000), 1000000] },
+    { id: 'first_100', icon: '🐣', name: 'Стартовый капитал', desc: 'Накопить 100 гусей', reward: 20,
+      check: s => s.maxScore >= 100, progress: s => [Math.min(s.maxScore, 100), 100] },
+    { id: 'chick_1k', icon: '🐥', name: 'Малыш-гусь', desc: 'Накопить 1 000 гусей', reward: 100,
+      check: s => s.maxScore >= 1000, progress: s => [Math.min(s.maxScore, 1000), 1000] },
+    { id: 'farm_10k', icon: '🦆', name: 'Гусиная ферма', desc: 'Накопить 10 000 гусей', reward: 1000,
+      check: s => s.maxScore >= 10000, progress: s => [Math.min(s.maxScore, 10000), 10000] },
+    { id: 'millionaire', icon: '💰', name: 'Гусиный магнат', desc: 'Накопить 1 000 000 гусей', reward: 50000,
+      check: s => s.maxScore >= 1000000, progress: s => [Math.min(s.maxScore, 1000000), 1000000] },
+    { id: 'billionaire', icon: '🦢', name: 'Гусиный олигарх', desc: 'Накопить 1 000 000 000 гусей', reward: 500000,
+      check: s => s.maxScore >= 1000000000, progress: s => [Math.min(s.maxScore, 1000000000), 1000000000] },
+    { id: 'trillionaire', icon: '🏛', name: 'Гусиный король', desc: 'Накопить 1 000 000 000 000 гусей', reward: 5000000,
+      check: s => s.maxScore >= 1000000000000, progress: s => [Math.min(s.maxScore, 1000000000000), 1000000000000] },
+    { id: 'time_10min', icon: '⏱', name: 'Терпеливый', desc: 'Играть 10 минут', reward: 100,
+      check: s => s.playTime >= 600, progress: s => [Math.min(s.playTime, 600), 600] },
+    { id: 'time_1h', icon: '🕐', name: 'Час с гусём', desc: 'Играть 1 час', reward: 5000,
+      check: s => s.playTime >= 3600, progress: s => [Math.min(s.playTime, 3600), 3600] },
+    { id: 'time_5h', icon: '🌙', name: 'Гусиный марафон', desc: 'Играть 5 часов', reward: 50000,
+      check: s => s.playTime >= 18000, progress: s => [Math.min(s.playTime, 18000), 18000] },
+    { id: 'first_upgrade', icon: '🏗', name: 'Первый апгрейд', desc: 'Купить любую прокачку 1 раз', reward: 15,
+      check: s => (s.levels.finger + s.levels.farm + s.levels.golden) >= 1,
+      progress: s => [Math.min(s.levels.finger + s.levels.farm + s.levels.golden, 1), 1] },
+    { id: 'finger_master', icon: '🖐', name: 'Мастер клика', desc: 'Купить 10 уровней «Крепкого пальца»', reward: 200,
+      check: s => s.levels.finger >= 10, progress: s => [Math.min(s.levels.finger, 10), 10] },
+    { id: 'finger_50', icon: '🎯', name: 'Полтинник', desc: 'Купить 50 уровней «Крепкого пальца»', reward: 50000,
+      check: s => s.levels.finger >= 50, progress: s => [Math.min(s.levels.finger, 50), 50] },
+    { id: 'finger_100', icon: '💠', name: 'Алмазный гусь', desc: 'Купить 100 уровней «Крепкого пальца»', reward: 1000000,
+      check: s => s.levels.finger >= 100, progress: s => [Math.min(s.levels.finger, 100), 100] },
+    { id: 'farm_first', icon: '🌱', name: 'Первая ферма', desc: 'Купить Гусеферму 1 раз', reward: 30,
+      check: s => s.levels.farm >= 1, progress: s => [Math.min(s.levels.farm, 1), 1] },
+    { id: 'automation', icon: '🤖', name: 'Автоматизация', desc: 'Купить 10 уровней «Гусефермы»', reward: 500,
+      check: s => s.levels.farm >= 10, progress: s => [Math.min(s.levels.farm, 10), 10] },
+    { id: 'farm_empire', icon: '🏭', name: 'Гусиная империя', desc: 'Купить 25 уровней «Гусефермы»', reward: 10000,
+      check: s => s.levels.farm >= 25, progress: s => [Math.min(s.levels.farm, 25), 25] },
+    { id: 'golden_master', icon: '✨', name: 'Золотой мастер', desc: 'Купить 10 уровней «Золотого пера»', reward: 5000,
+      check: s => s.levels.golden >= 10, progress: s => [Math.min(s.levels.golden, 10), 10] },
+    { id: 'golden_lord', icon: '👑', name: 'Владыка золота', desc: 'Купить 25 уровней «Золотого пера»', reward: 100000,
+      check: s => s.levels.golden >= 25, progress: s => [Math.min(s.levels.golden, 25), 25] },
+    { id: 'all_25', icon: '🏰', name: 'Всё по 25', desc: 'Прокачать все три улучшения до 25 уровня', reward: 250000,
+      check: s => s.levels.finger >= 25 && s.levels.farm >= 25 && s.levels.golden >= 25,
+      progress: s => [Math.min(s.levels.finger, 25) + Math.min(s.levels.farm, 25) + Math.min(s.levels.golden, 25), 75] },
+    { id: 'collector', icon: '🌟', name: 'Коллекционер', desc: 'Открыть 10 достижений', reward: 2000,
+      check: s => s.unlocked.length >= 10, progress: s => [Math.min(s.unlocked.length, 10), 10] },
+    { id: 'almost_all', icon: '🥈', name: 'Почти всё', desc: 'Открыть 20 достижений', reward: 50000,
+      check: s => s.unlocked.length >= 20, progress: s => [Math.min(s.unlocked.length, 20), 20] },
+    { id: 'achievement_master', icon: '🏆', name: 'Мастер достижений', desc: 'Открыть 28 достижений из 29', reward: 500000,
+      check: s => s.unlocked.length >= 28, progress: s => [Math.min(s.unlocked.length, 28), 28] }
+  ];
+
+  /* ==================== КОДЫ ==================== */
+  const CODES = [
+    { code: 'GOOSE100',  type: 'score',   value: 100,   desc: '+100 гусей' },
+    { code: 'GOOSE1000', type: 'score',   value: 1000,  desc: '+1 000 гусей' },
+    { code: 'GOOSE10000',type: 'score',   value: 10000, desc: '+10 000 гусей' },
+    { code: 'MEGA',      type: 'score',   value: 1000000, desc: '+1 000 000 гусей' },
+    { code: 'CLICK10',   type: 'finger',  value: 10,    desc: '+10 уровней «Крепкого пальца»' },
+    { code: 'FARM10',    type: 'farm',    value: 10,    desc: '+10 уровней «Гусефермы»' },
+    { code: 'GOLDEN5',   type: 'golden',  value: 5,     desc: '+5 уровней «Золотого пера»' },
+    { code: 'ALLIN',     type: 'allin',   value: 100,   desc: '+100 ур. всего и 100 000 гусей' },
+    { code: 'BOOST',     type: 'boost',   value: 5,     desc: '×10 ко всему на 5 минут ⚡' },
+    { code: 'SNOW',      type: 'score',   value: 1000000, desc: '+1 000 000 гусей (зимний)' },
+    { code: 'TAPGOD',    type: 'finger',  value: 1000,  desc: '+1000 уровней пальца (чит)' },
+    { code: 'OG',        type: 'score',   value: 500,   desc: '+500 гусей (ветеран)' }
+  ];
+
+  /* ==================== СОСТОЯНИЕ ==================== */
+  let state = {
+    score: 0, maxScore: 0, totalClicks: 0, playTime: 0,
+    levels: { finger: 0, farm: 0, golden: 0 },
+    unlocked: [],
+    usedCodes: [],
+    boostEndTime: 0
+  };
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem('gooseGame');
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (typeof s.score === 'number') state.score = s.score;
+        if (typeof s.maxScore === 'number') state.maxScore = s.maxScore;
+        if (typeof s.totalClicks === 'number') state.totalClicks = s.totalClicks;
+        if (typeof s.playTime === 'number') state.playTime = s.playTime;
+        if (typeof s.boostEndTime === 'number') state.boostEndTime = s.boostEndTime;
+        if (s.levels) {
+          for (const k in s.levels) {
+            if (typeof s.levels[k] === 'number') state.levels[k] = s.levels[k];
+          }
+        }
+        if (Array.isArray(s.unlocked)) state.unlocked = s.unlocked;
+        if (Array.isArray(s.usedCodes)) state.usedCodes = s.usedCodes;
+      }
+    } catch (e) {}
+    state.maxScore = Math.max(state.maxScore, state.score);
+  }
+  function saveState() {
+    try { localStorage.setItem('gooseGame', JSON.stringify(state)); } catch (e) {}
+  }
+  loadState();
+
+  function getBoostMultiplier() {
+    return Date.now() < state.boostEndTime ? 10 : 1;
+  }
+
+  function getClickValue() {
+    const base = 1 + state.levels.finger;
+    const mult = 1 + state.levels.golden * 0.1;
+    return base * mult * getBoostMultiplier();
+  }
+  function getCPS() {
+    return state.levels.farm * getBoostMultiplier();
+  }
+  function getCost(up) {
+    return Math.floor(up.baseCost * Math.pow(up.costMul, state.levels[up.id]));
+  }
+
+  /* ==================== DOM ==================== */
+  const scoreValEl = document.getElementById('scoreVal');
+  const statsEl = document.getElementById('stats');
+  const boostInfo = document.getElementById('boostInfo');
+  const boostTime = document.getElementById('boostTime');
+  const gooseWrap = document.getElementById('gooseWrap');
+  const gooseImg = document.getElementById('gooseImg');
+  const shop = document.getElementById('shop');
+  const shopToggle = document.getElementById('shopToggle');
+  const closeShop = document.getElementById('closeShop');
+  const shopContent = document.getElementById('shopContent');
+  const resetBtn = document.getElementById('resetBtn');
+  const soundBtn = document.getElementById('soundBtn');
+  const soundPanel = document.getElementById('soundPanel');
+  const musicToggle = document.getElementById('musicToggle');
+  const sfxToggle = document.getElementById('sfxToggle');
+  const musicVol = document.getElementById('musicVol');
+  const sfxVol = document.getElementById('sfxVol');
+  const achBtn = document.getElementById('achBtn');
+  const achPanel = document.getElementById('achPanel');
+  const achList = document.getElementById('achList');
+  const achCount = document.getElementById('achCount');
+  const achBar = document.getElementById('achBar');
+  const achToast = document.getElementById('achToast');
+  const achToastName = document.getElementById('achToastName');
+  const codeBtn = document.getElementById('codeBtn');
+  const codePanel = document.getElementById('codePanel');
+  const codeInput = document.getElementById('codeInput');
+  const codeApply = document.getElementById('codeApply');
+  const codeMsg = document.getElementById('codeMsg');
+
+  let touched = false;
+  let musicStarted = false;
+  const achQueue = [];
+  let achToastBusy = false;
+  let lastAchCheck = 0;
+  let lastQuackTime = 0;
+  let lastVibrateTime = 0;
+
+  function checkImage() {
+    if (gooseImg.complete && gooseImg.naturalWidth > 0) {
+      gooseWrap.classList.remove('no-image');
+    } else {
+      gooseWrap.classList.add('no-image');
+    }
+  }
+  gooseImg.addEventListener('load', checkImage);
+  gooseImg.addEventListener('error', checkImage);
+  setTimeout(checkImage, 100);
+  setTimeout(checkImage, 1000);
+
+  /* ==================== ПРОКАЧКИ ==================== */
+  function renderShop() {
+    shopContent.innerHTML = '';
+    for (const up of UPGRADES) {
+      const lv = state.levels[up.id];
+      const cost = getCost(up);
+      const canBuy = state.score >= cost;
+      const div = document.createElement('div');
+      div.className = 'upgrade ' + (canBuy ? 'can-buy' : 'locked');
+
+      let effectText = up.desc;
+      if (up.id === 'finger') effectText = `+${1 + lv} за клик → +${2 + lv} за клик`;
+      if (up.id === 'farm') effectText = `+${lv} /сек → +${lv + 1} /сек`;
+      if (up.id === 'golden') effectText = `+${lv * 10}% → +${(lv + 1) * 10}%`;
+
+      div.innerHTML = `
+        <div class="icon">${up.icon}</div>
+        <div class="info">
+          <div class="name">${up.name} <span class="lv">ур. ${lv}</span></div>
+          <div class="desc">${effectText}</div>
+        </div>
+        <div class="buy">
+          <div class="price ${canBuy ? '' : 'cant'}">${fmt(cost)} 🦆</div>
+        </div>
+      `;
+      if (canBuy) div.addEventListener('click', () => buyUpgrade(up.id));
+      shopContent.appendChild(div);
+    }
+    updateShopBadge();
+  }
+
+  function buyUpgrade(id) {
+    const up = UPGRADES.find(u => u.id === id);
+    if (!up) return;
+    const cost = getCost(up);
+    if (state.score < cost) return;
+    state.score -= cost;
+    state.levels[id]++;
+    Sound.buy();
+    if (navigator.vibrate) navigator.vibrate([20, 40, 20]);
+    updateScoreOnly();
+    updateStatsText();
+    renderShop();
+    checkAchievements(true);
+    saveState();
+  }
+
+  function updateShopBadge() {
+    let count = 0;
+    for (const up of UPGRADES) {
+      if (state.score >= getCost(up)) count++;
+    }
+    let badge = shopToggle.querySelector('.badge');
+    if (count > 0) {
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'badge';
+        shopToggle.appendChild(badge);
+      }
+      badge.textContent = count;
+    } else if (badge) badge.remove();
+  }
+
+  /* ==================== ДОСТИЖЕНИЯ ==================== */
+  function checkAchievements(force) {
+    const now = performance.now();
+    if (!force && now - lastAchCheck < 500) return;
+    lastAchCheck = now;
+
+    let loop = true;
+    const newlyUnlocked = [];
+    let guard = 0;
+    while (loop && guard < 10) {
+      loop = false;
+      guard++;
+      for (const ach of ACHIEVEMENTS) {
+        if (state.unlocked.includes(ach.id)) continue;
+        if (ach.check(state)) {
+          state.unlocked.push(ach.id);
+          state.score += ach.reward;
+          newlyUnlocked.push(ach);
+          loop = true;
+        }
+      }
+    }
+    if (newlyUnlocked.length > 0) {
+      updateScoreOnly();
+      if (achPanel.classList.contains('open')) renderAchievements();
+    }
+    newlyUnlocked.forEach((ach, i) => {
+      setTimeout(() => {
+        enqueueAchToast(ach);
+        if (i === 0) Sound.achievement();
+      }, i * 400);
+    });
+    if (newlyUnlocked.length > 0 && navigator.vibrate) {
+      navigator.vibrate([30, 50, 30, 50, 60]);
+    }
+  }
+
+  function enqueueAchToast(ach) {
+    achQueue.push(ach);
+    processAchQueue();
+  }
+  function processAchQueue() {
+    if (achToastBusy || achQueue.length === 0) return;
+    achToastBusy = true;
+    const ach = achQueue.shift();
+    achToastName.textContent = `${ach.icon} ${ach.name} · +${fmt(ach.reward)} 🦆`;
+    achToast.classList.add('show');
+    setTimeout(() => {
+      achToast.classList.remove('show');
+      setTimeout(() => { achToastBusy = false; processAchQueue(); }, 350);
+    }, 2200);
+  }
+
+  function renderAchievements() {
+    achList.innerHTML = '';
+    const unlocked = state.unlocked.length;
+    const total = ACHIEVEMENTS.length;
+    achCount.textContent = `${unlocked} / ${total}`;
+    achBar.style.width = (unlocked / total * 100) + '%';
+
+    for (const ach of ACHIEVEMENTS) {
+      const isUnlocked = state.unlocked.includes(ach.id);
+      const [cur, max] = ach.progress(state);
+
+      const div = document.createElement('div');
+      div.className = 'achievement' + (isUnlocked ? ' unlocked' : '');
+
+      let progressStr = '';
+      if (!isUnlocked && max > 1) {
+        if (ach.id.startsWith('time_')) progressStr = `${fmtTime(cur)} / ${fmtTime(max)}`;
+        else progressStr = `${fmt(cur)} / ${fmt(max)}`;
+      }
+
+      div.innerHTML = `
+        <div class="achIcon">${ach.icon}</div>
+        <div class="achInfo">
+          <div class="achName">${ach.name} <span class="reward">+${fmt(ach.reward)} 🦆</span></div>
+          <div class="achDesc">${ach.desc}</div>
+          ${progressStr ? `<div class="achProgress">${progressStr}</div>` : ''}
+        </div>
+        <div class="achCheck">✓</div>
+      `;
+      achList.appendChild(div);
+    }
+
+    const ready = ACHIEVEMENTS.filter(a => !state.unlocked.includes(a.id) && a.check(state)).length;
+    let badge = achBtn.querySelector('.badge');
+    if (ready > 0) {
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'badge';
+        achBtn.appendChild(badge);
+      }
+      badge.textContent = ready;
+    } else if (badge) badge.remove();
+  }
+
+  /* ==================== КОДЫ ==================== */
+  function showCodeMsg(text, isOk) {
+    codeMsg.textContent = text;
+    codeMsg.className = 'codeMsg ' + (isOk ? 'ok' : 'err');
+    clearTimeout(showCodeMsg._t);
+    showCodeMsg._t = setTimeout(() => {
+      codeMsg.className = 'codeMsg';
+    }, 3000);
+  }
+
+  function applyCode() {
+    const raw = (codeInput.value || '').trim().toUpperCase();
+    if (!raw) {
+      showCodeMsg('Введи код!', false);
+      Sound.codeBad();
+      return;
+    }
+    const found = CODES.find(c => c.code === raw);
+    if (!found) {
+      showCodeMsg('❌ Неверный код', false);
+      Sound.codeBad();
+      if (navigator.vibrate) navigator.vibrate(80);
+      return;
+    }
+    if (state.usedCodes.includes(found.code)) {
+      showCodeMsg('⚠️ Этот код уже использован', false);
+      Sound.codeBad();
+      return;
+    }
+    if (found.type === 'score') {
+      state.score += found.value;
+      if (state.score > state.maxScore) state.maxScore = state.score;
+    } else if (found.type === 'finger') {
+      state.levels.finger += found.value;
+    } else if (found.type === 'farm') {
+      state.levels.farm += found.value;
+    } else if (found.type === 'golden') {
+      state.levels.golden += found.value;
+    } else if (found.type === 'allin') {
+      state.levels.finger += found.value;
+      state.levels.farm += found.value;
+      state.levels.golden += found.value;
+      state.score += 100000;
+      if (state.score > state.maxScore) state.maxScore = state.score;
+    } else if (found.type === 'boost') {
+      const mins = found.value;
+      state.boostEndTime = Date.now() + mins * 60 * 1000;
+    }
+    state.usedCodes.push(found.code);
+    codeInput.value = '';
+    showCodeMsg('✅ ' + found.desc, true);
+    Sound.codeGood();
+    if (navigator.vibrate) navigator.vibrate([30, 50, 30, 50, 80]);
+    updateScoreOnly();
+    updateStatsText();
+    checkAchievements(true);
+    saveState();
+  }
+
+  codeApply.addEventListener('click', applyCode);
+  codeInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') applyCode();
+  });
+
+  /* ==================== UI ==================== */
+  function updateScoreOnly() {
+    scoreValEl.textContent = fmt(state.score);
+  }
+  function updateStatsText() {
+    statsEl.textContent = `+${fmt(getClickValue())} за клик · +${fmt(getCPS())}/сек`;
+  }
+  function updateBoostUI() {
+    if (Date.now() < state.boostEndTime) {
+      const left = (state.boostEndTime - Date.now()) / 1000;
+      boostInfo.classList.add('on');
+      boostTime.textContent = fmtShortTime(left);
+    } else {
+      boostInfo.classList.remove('on');
+    }
+  }
+
+  let popupCount = 0;
+  const MAX_POPUPS = 6;
+
+  function tapGoose(e) {
+    if (e.type === 'click' && touched) return;
+    if (e.type === 'touchstart') touched = true;
+    setTimeout(() => touched = false, 400);
+    e.preventDefault();
+
+    Sound.init();
+    if (!musicStarted) {
+      musicStarted = true;
+      if (Sound.settings.musicOn) Sound.startMusic();
+    }
+
+    const gain = getClickValue();
+    state.score += gain;
+    state.totalClicks++;
+    if (state.score > state.maxScore) state.maxScore = state.score;
+
+    const now = performance.now();
+    const isSpam = now - lastQuackTime < 120;
+    lastQuackTime = now;
+
+    if (!isSpam) Sound.quack();
+    Sound.pop();
+
+    if (navigator.vibrate && now - lastVibrateTime > 100) {
+      lastVibrateTime = now;
+      navigator.vibrate(20);
+    }
+
+    let x, y;
+    if (e.touches && e.touches[0]) {
+      x = e.touches[0].clientX; y = e.touches[0].clientY;
+    } else {
+      x = e.clientX; y = e.clientY;
+    }
+
+    if (popupCount >= MAX_POPUPS) {
+      const oldPopups = document.querySelectorAll('.popup');
+      if (oldPopups.length > 0) {
+        oldPopups[0].remove();
+        popupCount--;
+      }
+    }
+
+    const popup = document.createElement('div');
+    popup.className = 'popup';
+    popup.textContent = '+' + fmt(gain);
+    popup.style.left = x + 'px';
+    popup.style.top = y + 'px';
+    document.body.appendChild(popup);
+    popupCount++;
+    setTimeout(() => {
+      popup.remove();
+      popupCount--;
+    }, 700);
+
+    updateScoreOnly();
+    checkAchievements(false);
+  }
+
+  let lastTick = performance.now();
+  let lastSecondMark = Math.floor(performance.now() / 1000);
+  let lastBadgeMark = lastSecondMark;
+  let lastBoostCheck = 0;
+
+  function gameLoop(now) {
+    const dt = (now - lastTick) / 1000;
+    lastTick = now;
+
+    const cps = getCPS();
+    if (cps > 0) {
+      state.score += cps * dt;
+      if (state.score > state.maxScore) state.maxScore = state.score;
+      updateScoreOnly();
+    }
+
+    if (now - lastBoostCheck > 250) {
+      lastBoostCheck = now;
+      updateBoostUI();
+    }
+
+    const secMark = Math.floor(now / 1000);
+    if (secMark !== lastSecondMark) {
+      lastSecondMark = secMark;
+      if (!document.hidden) state.playTime++;
+      checkAchievements(false);
+      if (secMark % 3 === 0 && secMark !== lastBadgeMark) {
+        lastBadgeMark = secMark;
+        updateStatsText();
+        updateShopBadge();
+      }
+    }
+
+    requestAnimationFrame(gameLoop);
+  }
+  requestAnimationFrame(gameLoop);
+
+  shopToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    shop.classList.add('open');
+    renderShop();
+  });
+  closeShop.addEventListener('click', () => shop.classList.remove('open'));
+
+  function closeAllPanels() {
+    soundPanel.classList.remove('open');
+    achPanel.classList.remove('open');
+    codePanel.classList.remove('open');
+    soundBtn.classList.remove('active');
+    achBtn.classList.remove('active');
+    codeBtn.classList.remove('active');
+  }
+  function refreshPanelBtns() {
+    soundBtn.classList.toggle('active', soundPanel.classList.contains('open'));
+    achBtn.classList.toggle('active', achPanel.classList.contains('open'));
+    codeBtn.classList.toggle('active', codePanel.classList.contains('open'));
+  }
+
+  soundBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const wasOpen = soundPanel.classList.contains('open');
+    closeAllPanels();
+    if (!wasOpen) soundPanel.classList.add('open');
+    refreshSoundUI();
+    refreshPanelBtns();
+  });
+  achBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const wasOpen = achPanel.classList.contains('open');
+    closeAllPanels();
+    if (!wasOpen) {
+      achPanel.classList.add('open');
+      renderAchievements();
+    }
+    refreshPanelBtns();
+  });
+  codeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const wasOpen = codePanel.classList.contains('open');
+    closeAllPanels();
+    if (!wasOpen) {
+      codePanel.classList.add('open');
+      setTimeout(() => codeInput.focus(), 200);
+    }
+    refreshPanelBtns();
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!soundPanel.contains(e.target) && !soundBtn.contains(e.target) &&
+        !achPanel.contains(e.target) && !achBtn.contains(e.target) &&
+        !codePanel.contains(e.target) && !codeBtn.contains(e.target)) {
+      closeAllPanels();
+      refreshPanelBtns();
+    }
+  });
+  [soundPanel, achPanel, codePanel].forEach(p => {
+    p.addEventListener('click', (e) => e.stopPropagation());
+  });
+
+  function refreshSoundUI() {
+    const s = Sound.settings;
+    musicToggle.classList.toggle('on', s.musicOn);
+    sfxToggle.classList.toggle('on', s.sfxOn);
+    musicVol.value = Math.round(s.musicVol * 100);
+    sfxVol.value = Math.round(s.sfxVol * 100);
+  }
+
+  musicToggle.addEventListener('click', () => {
+    Sound.init();
+    Sound.setMusicOn(!Sound.settings.musicOn);
+    if (Sound.settings.musicOn && !musicStarted) {
+      musicStarted = true;
+      Sound.startMusic();
+    }
+    refreshSoundUI();
+  });
+  sfxToggle.addEventListener('click', () => {
+    Sound.init();
+    Sound.setSfxOn(!Sound.settings.sfxOn);
+    refreshSoundUI();
+    if (Sound.settings.sfxOn) Sound.quack();
+  });
+  musicVol.addEventListener('input', (e) => { Sound.init(); Sound.setMusicVol(e.target.value / 100); });
+  sfxVol.addEventListener('input', (e) => { Sound.init(); Sound.setSfxVol(e.target.value / 100); });
+
+  refreshSoundUI();
+
+  resetBtn.addEventListener('click', () => {
+    if (!confirm('Точно сбросить весь прогресс, достижения и коды?')) return;
+    state.score = 0;
+    state.maxScore = 0;
+    state.totalClicks = 0;
+    state.playTime = 0;
+    state.levels = { finger: 0, farm: 0, golden: 0 };
+    state.unlocked = [];
+    state.usedCodes = [];
+    state.boostEndTime = 0;
+    saveState();
+    updateScoreOnly();
+    updateStatsText();
+    renderShop();
+    renderAchievements();
+    updateBoostUI();
+  });
+
+  gooseWrap.addEventListener('touchstart', tapGoose, {passive: false});
+  gooseWrap.addEventListener('click', tapGoose);
+
+  updateStatsText();
+  renderAchievements();
+  updateBoostUI();
+  setInterval(saveState, 5000);
+  window.addEventListener('beforeunload', saveState);
+
+  updateScoreOnly();
+</script>
+
+</body>
+</html>
